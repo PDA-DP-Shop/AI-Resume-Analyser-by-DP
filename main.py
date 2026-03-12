@@ -1,28 +1,43 @@
 import streamlit as st
 import pdfplumber
 from groq import Groq
+import pytesseract
+from pdf2image import convert_from_bytes
+from PIL import Image
 
-st.set_page_config(page_title="AI Resume Analyzer", page_icon="📄")
+st.set_page_config(page_title="AI Resume Analyzer")
 
 st.title("AI Resume Analyzer")
 
 uploaded_file = st.file_uploader("Upload Resume", type=["pdf","txt"])
 job_role = st.text_input("Target Job Role")
 
-def extract_text(file):
+
+def extract_text_from_pdf(file):
 
     text = ""
 
-    if file.type == "application/pdf":
+    # Try normal PDF extraction
+    with pdfplumber.open(file) as pdf:
+        for page in pdf.pages:
+            text += page.extract_text() or ""
 
-        with pdfplumber.open(file) as pdf:
-            for page in pdf.pages:
-                text += page.extract_text() or ""
+    # If no text found, use OCR
+    if text.strip() == "":
+        images = convert_from_bytes(file.read())
 
-    else:
-        text = file.read().decode()
+        for img in images:
+            text += pytesseract.image_to_string(img)
 
     return text
+
+
+def extract_text(file):
+
+    if file.type == "application/pdf":
+        return extract_text_from_pdf(file)
+
+    return file.read().decode()
 
 
 if st.button("Analyze"):
@@ -33,8 +48,8 @@ if st.button("Analyze"):
 
     resume_text = extract_text(uploaded_file)
 
-    if not resume_text:
-        st.error("Could not read the resume text")
+    if resume_text.strip() == "":
+        st.error("Could not read resume text")
         st.stop()
 
     client = Groq(api_key=st.secrets["GROQ_API_KEY"])
@@ -60,9 +75,7 @@ Resume:
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role":"user","content":prompt}],
-        temperature=0.7
     )
 
     st.subheader("Resume Analysis")
-
     st.write(response.choices[0].message.content)
