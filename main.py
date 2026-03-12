@@ -1,9 +1,9 @@
 import streamlit as st
 import pdfplumber
 from groq import Groq
-import pytesseract
-from pdf2image import convert_from_bytes
+import easyocr
 from PIL import Image
+import numpy as np
 
 st.set_page_config(page_title="AI Resume Analyzer")
 
@@ -16,8 +16,8 @@ uploaded_file = st.file_uploader(
 
 job_role = st.text_input("Target Job Role")
 
+reader = easyocr.Reader(['en'])
 
-# -------- TEXT EXTRACTION --------
 
 def extract_text(file):
 
@@ -29,29 +29,23 @@ def extract_text(file):
 
     # PDF
     elif file.type == "application/pdf":
-
-        try:
-            with pdfplumber.open(file) as pdf:
-                for page in pdf.pages:
-                    text += page.extract_text() or ""
-        except:
-            pass
-
-        # If PDF text empty → OCR
-        if text.strip() == "":
-            images = convert_from_bytes(file.read())
-            for img in images:
-                text += pytesseract.image_to_string(img)
+        with pdfplumber.open(file) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() or ""
 
     # IMAGE
     elif file.type in ["image/png", "image/jpeg", "image/jpg"]:
+
         image = Image.open(file)
-        text = pytesseract.image_to_string(image)
+        image_np = np.array(image)
+
+        result = reader.readtext(image_np)
+
+        for detection in result:
+            text += detection[1] + " "
 
     return text
 
-
-# -------- ANALYZE --------
 
 if st.button("Analyze"):
 
@@ -75,7 +69,7 @@ Analyze this resume and provide:
 1. Overall Summary
 2. Strengths
 3. Weaknesses
-4. Suggestions
+4. Suggestions for improvement
 5. ATS Keywords
 6. Resume Score out of 100
 
@@ -91,4 +85,5 @@ Resume:
     )
 
     st.subheader("Resume Analysis")
+
     st.write(response.choices[0].message.content)
