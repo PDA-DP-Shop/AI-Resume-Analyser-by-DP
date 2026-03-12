@@ -9,36 +9,49 @@ st.set_page_config(page_title="AI Resume Analyzer")
 
 st.title("AI Resume Analyzer")
 
-uploaded_file = st.file_uploader("Upload Resume", type=["pdf","txt"])
+uploaded_file = st.file_uploader(
+    "Upload Resume",
+    type=["pdf", "txt", "png", "jpg", "jpeg"]
+)
+
 job_role = st.text_input("Target Job Role")
 
 
-def extract_text_from_pdf(file):
+# -------- TEXT EXTRACTION --------
+
+def extract_text(file):
 
     text = ""
 
-    # Try normal PDF extraction
-    with pdfplumber.open(file) as pdf:
-        for page in pdf.pages:
-            text += page.extract_text() or ""
+    # TXT
+    if file.type == "text/plain":
+        text = file.read().decode()
 
-    # If no text found, use OCR
-    if text.strip() == "":
-        images = convert_from_bytes(file.read())
+    # PDF
+    elif file.type == "application/pdf":
 
-        for img in images:
-            text += pytesseract.image_to_string(img)
+        try:
+            with pdfplumber.open(file) as pdf:
+                for page in pdf.pages:
+                    text += page.extract_text() or ""
+        except:
+            pass
+
+        # If PDF text empty → OCR
+        if text.strip() == "":
+            images = convert_from_bytes(file.read())
+            for img in images:
+                text += pytesseract.image_to_string(img)
+
+    # IMAGE
+    elif file.type in ["image/png", "image/jpeg", "image/jpg"]:
+        image = Image.open(file)
+        text = pytesseract.image_to_string(image)
 
     return text
 
 
-def extract_text(file):
-
-    if file.type == "application/pdf":
-        return extract_text_from_pdf(file)
-
-    return file.read().decode()
-
+# -------- ANALYZE --------
 
 if st.button("Analyze"):
 
@@ -62,8 +75,8 @@ Analyze this resume and provide:
 1. Overall Summary
 2. Strengths
 3. Weaknesses
-4. Suggestions for Improvement
-5. ATS Keyword Suggestions
+4. Suggestions
+5. ATS Keywords
 6. Resume Score out of 100
 
 Target Job Role: {job_role}
@@ -74,7 +87,7 @@ Resume:
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=[{"role":"user","content":prompt}],
+        messages=[{"role": "user", "content": prompt}]
     )
 
     st.subheader("Resume Analysis")
