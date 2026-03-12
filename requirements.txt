@@ -1,6 +1,6 @@
 streamlit
 pdfplumber
 groq
-pytesseract
+easyocr
 pillow
-pdf2image
+numpy
